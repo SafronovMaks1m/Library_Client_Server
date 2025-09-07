@@ -1,0 +1,9 @@
+{
+  "name": "C++ Dev",
+  "image": "cpp_ubuntu",
+  "workspaceFolder": "/app",
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/app,type=bind",
+    "source=${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind,consistency=cached"
+  ]
+}
