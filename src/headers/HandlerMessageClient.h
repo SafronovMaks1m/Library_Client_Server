@@ -1,0 +1,34 @@
+#pragma once
+#include <memory>
+#include <chrono>
+#include <cstdint>
+#include <unordered_map>
+#include <functional>
+#include <typeindex>
+#include <iostream>
+#include "Message.h"
+#include <string>
+#include "HandlerMessage.h"
+#include "Client.h"
+
+class HandlerMessageClient : public HandlerMessage {
+private:
+    Client& _client;
+    std::unordered_map<std::string, std::function<void(BaseMessage& msg)>> handlers;
+
+    template <class T>
+    void register_handler(std::string name, std::function<void(T&)> func) {
+        handlers[name] = [func](BaseMessage& msg){ 
+            func(static_cast<T&>(msg));
+        };
+    }
+
+    void handler(std::unique_ptr<BaseMessage>& msg) override;
+
+public:
+    HandlerMessageClient(Client& client);
+
+    void handler(ConnectionAcceptMessage* msg);
+    void handler(PingMessage* msg);
+    void handler(PongMessage* msg);
+};
