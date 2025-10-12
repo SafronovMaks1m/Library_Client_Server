@@ -2,21 +2,30 @@
 #include <map>
 #include <memory>
 #include <queue>
-#include "Message.h"
 #include <string>
+#include <utility>
 #include "Connection.h"
-#include "CompareMessage.h"
-#include "HandlerMessage.h"
+#include "Message.h"
 
 class HandlerMessageServer;
 
 class Server {
     private:
-        std::map<std::string, std::unique_ptr<Connection>> _connections;
-        std::priority_queue<std::unique_ptr<BaseMessage>, std::vector<std::unique_ptr<BaseMessage>>, CompareMessage> _messages;
-        std::unique_ptr<HandlerMessage> handle;
-        friend class HandlerMessageServer;
+        std::vector<std::shared_ptr<Connection>> _connections;
+        std::queue<std::pair<std::shared_ptr<Connection>, std::unique_ptr<BaseMessage>>, 
+            std::vector<std::pair<std::shared_ptr<Connection>, std::unique_ptr<BaseMessage>>>> _messages;
+        std::unique_ptr<HandlerMessageServer> handle;
         
+        friend class HandlerMessageServer;
+        friend class HandlerServerFixture_HandlerServerMessageDisconnect_Test;
     public:
-        const std::map<std::string, std::unique_ptr<Connection>>& getConnections() const;
+        const std::vector<std::shared_ptr<Connection>>& getConnections() const;
+
+        void accepting_connections();
+
+        void send_message(const BaseMessage& msg);
+
+        void recv_message();
+
+        void disconnect();
 };

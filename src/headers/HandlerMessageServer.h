@@ -6,29 +6,22 @@
 #include <functional>
 #include <typeindex>
 #include <iostream>
-#include "Message.h"
 #include <string>
-#include "HandlerMessage.h"
+#include "Message.h"
 #include "Server.h"
+#include "Connection.h"
 
-class HandlerMessageServer : public HandlerMessage {
+class HandlerMessageServer {
 private:
     Server& _server;
-    std::unordered_map<std::string, std::function<void(BaseMessage& msg)>> handlers;
 
-    template <class T>
-    void register_handler(std::string name, std::function<void(T&)> func) {
-        handlers[name] = [func](BaseMessage& msg){ 
-            func(static_cast<T&>(msg));
-        };
-    }
-
-    void handler(std::unique_ptr<BaseMessage>& msg);
-
+    std::string _lastLog;
+    void log(const std::string& message) { _lastLog = message; }
 public:
     HandlerMessageServer(Server& server);
-    
-    void handler(ConnectionRequestMessage* msg);
-    void handler(PingMessage* msg);
-    void handler(PongMessage* msg);
+    void handler(std::unique_ptr<BaseMessage>&& msg, const std::shared_ptr<Connection>& connection);
+    void handler_ping(PingMessage* msg, const std::shared_ptr<Connection>& connection);
+    void handler_pong(PongMessage* msg);
+    void handler_disconnect(DisconnectMessage* msg, const std::shared_ptr<Connection>& connection);
+    const std::string& getLastLog() const { return _lastLog; }
 };

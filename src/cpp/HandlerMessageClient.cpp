@@ -1,44 +1,58 @@
-
 #include "HandlerMessageClient.h"
 
-void HandlerMessageClient::handler(std::unique_ptr<BaseMessage>& msg) {
-    auto it = handlers.find(msg->type_name()); 
-    if (it != handlers.end()) {
-        it->second(*(msg.get()));
-    }
-    else if (auto* mes = dynamic_cast<ConnectionAcceptMessage*>(msg.get())) {
-        handler(mes);
+HandlerMessageClient::HandlerMessageClient(Client& client): _client(client){}
+
+void HandlerMessageClient::handler(std::unique_ptr<BaseMessage>&& msg) {
+    if (auto* mes = dynamic_cast<ConnectionAcceptMessage*>(msg.get())) {
+        handler_connect(mes);
     }
     else if (auto* mes = dynamic_cast<PingMessage*>(msg.get())) {
-        handler(mes);
+        handler_ping(mes);
     }
     else if (auto* mes = dynamic_cast<PongMessage*>(msg.get())) {
-        handler(mes);
+        handler_pong(mes);
+    }
+    else if (auto* mes = dynamic_cast<DisconnectMessage*>(msg.get())){
+        handler_disconnect(mes);
     }
     else {
-        std::cout << "No handler for message";
+        std::cout << "no handler for the message";
+        log("no handler for the message");
     }
 }
 
-void HandlerMessageClient::handler(ConnectionAcceptMessage* msg) {
-    if (msg->accepted == true) {
+void HandlerMessageClient::handler_connect(ConnectionAcceptMessage* msg) {
+    if (msg->accepted) {
         std::cout << "Connection successful";
+        log("Connection successful");
     } else {
         std::cout << "Connection failed. Error: " << msg->reason;
+        log("Connection failed. Error: " + msg->reason);
     }
 }
 
-void HandlerMessageClient::handler(PingMessage* msg) {
-    PongMessage pong(msg->timestamp);
-    std::cout << "send pong to the server" << std::endl;
+void HandlerMessageClient::handler_ping(PingMessage* msg) {
+    _client._connection = std::make_shared<Connection>(); // потом уберу, просто чтобы правильно работали тесты
+    _client._connection->send(std::make_unique<PongMessage>(msg->timestamp));
+    std::string out = "send pong to the server with " + std::to_string(msg->timestamp) + " ms"; 
+    std::cout << out << std::endl;
+    log(out);
 }
 
-void HandlerMessageClient::handler(PongMessage* msg) {
+void HandlerMessageClient::handler_pong(PongMessage* msg) {
     auto now = std::chrono::system_clock::now();
     auto initial_time = std::chrono::system_clock::time_point(
         std::chrono::milliseconds(msg->timestamp)
     );
     
     auto ping_time = std::chrono::duration_cast<std::chrono::milliseconds>(now - initial_time);
-    std::cout << "Ping = " << ping_time.count() << "ms";
+    std::string out = "Ping = " + std::to_string(ping_time.count()) + " ms";
+    std::cout << out << "ms";
+    log(out);
+}
+
+void HandlerMessageClient::handler_disconnect(DisconnectMessage* msg){
+    std::string out = "Disconnected from server. Reason: " + msg->reason;
+    std::cout << out << std::endl;
+    log(out);
 }

@@ -1,6 +1,7 @@
 #include "Server.h"
+#include "Connection.h"
 #include "HandlerMessageServer.h"
 
-const std::map<std::string, std::unique_ptr<Connection>>& Server::getConnections() const {
+const std::vector<std::shared_ptr<Connection>>& Server::getConnections() const {
     return _connections;
 }

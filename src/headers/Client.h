@@ -1,17 +1,25 @@
+#pragma once
 #include <memory>
 #include <queue>
 #include "Message.h"
 #include "Connection.h"
-#include "CompareMessage.h"
-#include "HandlerMessage.h"
 
 class HandlerMessageClient;
 
 class Client{
     private:
-        std::shared_ptr<Connection> _server;
-        std::priority_queue<std::unique_ptr<BaseMessage>, std::vector<std::unique_ptr<BaseMessage>>, CompareMessage> _messages;
+        std::shared_ptr<Connection> _connection;
+        std::queue<std::unique_ptr<BaseMessage>, std::vector<std::unique_ptr<BaseMessage>>> _messages;
 
-        std::unique_ptr<HandlerMessage> handle;
+        std::unique_ptr<HandlerMessageClient> handle;
         friend class HandlerMessageClient;
+    public:
+
+        void connection_request();
+
+        void send_message(const BaseMessage& msg);
+
+        void recv_message();
+
+        void disconnect();
 };
