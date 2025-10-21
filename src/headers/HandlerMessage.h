@@ -1,7 +1,9 @@
 #pragma once
 #include <memory>
+#include "Connection.h" 
 #include "Message.h"
 
 class HandlerMessage {
-    virtual void handler(std::unique_ptr<BaseMessage>& msg) = 0;
-};  
+    public:
+        virtual void handler(std::unique_ptr<BaseMessage>&& msg, const std::unique_ptr<Connection>& connection = nullptr) = 0;
+};

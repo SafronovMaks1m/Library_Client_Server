@@ -15,11 +15,14 @@ add_executable(run_tests
     src/cpp/HandlerMessageServer.cpp
     src/cpp/Client.cpp
     src/cpp/HandlerMessageClient.cpp
+    examples/cpp/server_create_handlers.cpp
+    examples/cpp/client_create_handlers.cpp
 )
 
 target_include_directories(run_tests PRIVATE
     include
     src/headers
+    examples/headers
 )
 
 target_link_libraries(run_tests 

@@ -1,2 +1,5 @@
+src/headers/HandlerMessageServerInterface.h
+src/headers/HandlerMessageClientInterface.h
+src/headers/HandlerMessage.h
 build/
 .vscode/

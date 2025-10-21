@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <unordered_map>
 #include <functional>
-#include <typeindex>
 #include <iostream>
 #include <string>
 #include "Message.h"
@@ -14,14 +13,20 @@
 class HandlerMessageServer {
 private:
     Server& _server;
+    
+    using MessageType = uint16_t;
+    std::unordered_map<MessageType, std::function<void(BaseMessage& msg, Connection& connection)>> handlers;
 
-    std::string _lastLog;
-    void log(const std::string& message) { _lastLog = message; }
 public:
+    template <class T>
+    void register_handler(MessageType type_name, std::function<void(Server&, T&, Connection&)> func) {
+        if (handlers.find(type_name) != handlers.end()) {
+            throw std::logic_error("Handler for this type_name already exists");
+        }
+        handlers[type_name] = [this, func](BaseMessage& msg, Connection& connection) {
+            func(_server, static_cast<T&>(msg), connection);
+        };
+    }
     HandlerMessageServer(Server& server);
-    void handler(std::unique_ptr<BaseMessage>&& msg, const std::shared_ptr<Connection>& connection);
-    void handler_ping(PingMessage* msg, const std::shared_ptr<Connection>& connection);
-    void handler_pong(PongMessage* msg);
-    void handler_disconnect(DisconnectMessage* msg, const std::shared_ptr<Connection>& connection);
-    const std::string& getLastLog() const { return _lastLog; }
+    void handler(std::unique_ptr<BaseMessage>&& msg, Connection& connection);
 };
