@@ -17,6 +17,8 @@ add_executable(run_tests
     src/cpp/HandlerMessageClient.cpp
     examples/cpp/server_create_handlers.cpp
     examples/cpp/client_create_handlers.cpp
+    examples/cpp/UserClient.cpp
+    examples/cpp/UserServer.cpp
 )
 
 target_include_directories(run_tests PRIVATE

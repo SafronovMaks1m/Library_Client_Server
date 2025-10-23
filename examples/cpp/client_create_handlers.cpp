@@ -1,7 +1,6 @@
 #include <iostream>
 #include <chrono>
-#include "HandlerMessageClient.h"
-#include "../headers/client_create_handlers.h"
+#include "client_create_handlers.h"
 
 void handler_connect(Client& client, ConnectionAcceptMessage& msg){
     if (msg.accepted) {
@@ -37,11 +36,4 @@ void handler_disconnect(Client& client,DisconnectMessage& msg){
     std::string out = "Disconnected from server. Reason: " + msg.reason;
     std::cout << out << std::endl;
     log(out);
-}
-
-void reg(Client& client){
-    client.handler->register_handler<ConnectionAcceptMessage>(4, handler_connect);
-    client.handler->register_handler<PingMessage>(1, handler_ping);
-    client.handler->register_handler<PongMessage>(2, handler_pong);
-    client.handler->register_handler<DisconnectMessage>(3, handler_disconnect);
 }

@@ -1,13 +1,10 @@
 #include <gtest/gtest.h>
-#include "Client.h"
-#include "HandlerMessageClient.h"
-#include "../examples/headers/client_create_handlers.h"
+#include "UserClient.h"
 
 struct HandlerClientFixture : public testing::Test {
-    Client client;
+    UserClient client;
     HandlerClientFixture() : client(1111, "127.0.0.1") {}
     void SetUp() {
-        reg(client);
     }
 
     void TearDown() {

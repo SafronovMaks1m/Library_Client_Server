@@ -3,8 +3,7 @@
 #include <chrono>
 #include <iostream>
 #include "Server.h"
-#include "../headers/server_create_handlers.h"
-#include "HandlerMessageServer.h"
+#include "server_create_handlers.h"
 
 void handler_ping(Server& server, PingMessage& msg, Connection& connection) {
     PongMessage pong(msg.timestamp);
@@ -37,10 +36,4 @@ void handler_disconnect(Server& server, DisconnectMessage& msg, Connection& conn
     }
     std::cout << "Client disconnected, reason: " << msg.reason << std::endl;
     log(out);
-}
-
-void reg(Server& server){
-    server.handler->register_handler<PingMessage>(1, handler_ping);
-    server.handler->register_handler<PongMessage>(2, handler_pong);
-    server.handler->register_handler<DisconnectMessage>(3, handler_disconnect);
 }

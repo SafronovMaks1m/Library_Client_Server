@@ -1,13 +1,10 @@
 #include <gtest/gtest.h>
-#include "Server.h"
-#include "HandlerMessageServer.h"
-#include "../examples/headers/server_create_handlers.h"
+#include "UserServer.h"
 
 struct HandlerServerFixture : public testing::Test {
-    Server server;
+    UserSever server;
     HandlerServerFixture() : server(1111, "127.0.0.1") {}
     void SetUp() {
-        reg(server);
     }
 
     void TearDown() {
