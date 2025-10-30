@@ -3,11 +3,12 @@
 HandlerMessageClient::HandlerMessageClient(Client& client): _client(client){}
 
 void HandlerMessageClient::handler(std::unique_ptr<BaseMessage>&& msg) {
-    auto it = handlers.find(msg->type_name());
+    MessageType id = msg->getType();
+    auto it = handlers.find(id);
     if (it != handlers.end()) {
         it->second(*msg);
     }
     else {
-        std::cout << "no handler for the message";
+        std::cout << "No handler for the message" << std::endl;
     }
 }

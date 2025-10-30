@@ -1,27 +1,25 @@
 #pragma once
 #include "Message.h"
+#include "enums.h"
 
-struct PingMessage : BaseMessage { 
+
+struct PingMessage : Message<Messages::Ping> { 
     uint64_t timestamp;
     PingMessage(const uint64_t& ts): timestamp(ts){}
-    MessageType type_name() const {return 1;}
 };
 
-struct PongMessage : BaseMessage { 
+struct PongMessage : Message<Messages::Pong> { 
     uint64_t timestamp; 
     PongMessage(const uint64_t& ts) : timestamp(ts) {}
-    MessageType type_name() const {return 2;}
 };
 
-struct DisconnectMessage : BaseMessage {
+struct DisconnectMessage : Message<Messages::Disconnect> {
     std::string reason;
     DisconnectMessage(const std::string& reason_msg = "") : reason(reason_msg) {}
-    MessageType type_name() const {return 3;}
 };
 
-struct ConnectionAcceptMessage : BaseMessage {
+struct ConnectionAcceptMessage : Message<Messages::Connection> {
     bool accepted;
     std::string reason;
     ConnectionAcceptMessage(const bool& accept, const std::string& reason_msg = ""): accepted(accept), reason(reason_msg){}
-    MessageType type_name() const {return 4;}
 };
