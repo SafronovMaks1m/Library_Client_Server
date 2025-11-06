@@ -41,7 +41,6 @@ TEST_F(HandlerClientFixture, HandlerClientMessagePong){
 }
 
 TEST_F(HandlerClientFixture, HandlerClientMessageDisconnect){
-    auto con = std::make_shared<Connection>();
     client.handler->handler(std::make_unique<DisconnectMessage>("simple shutdown"));
     std::string out = "Disconnected from server. Reason: simple shutdown";
     std::string log = getLastLog();

@@ -1,8 +1,5 @@
 #pragma once
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+#include <boost/asio.hpp>
 #include <map>
 #include <memory>
 #include <queue>
@@ -10,25 +7,37 @@
 #include <utility>
 #include <thread>
 #include <mutex>
+#include <condition_variable>
 #include "Connection.h"
 #include "Message.h"
 
 class HandlerMessageServer;
 
+using namespace boost::asio;
+using boost::asio::ip::tcp;
+
 class Server {
     private:
-        using SOCKET = int;
         uint16_t _port;
         std::string _ip;
         bool _running;
-        std::thread main_thread;
-        SOCKET main_socket;
 
+        std::thread main_thread;
+        std::thread recv_msg_thread;
+        std::mutex _messages_mutex;
+        std::condition_variable _messages_cv;
+        mutable std::mutex _connection_mutex;
+        std::mutex _stop_mutex;
+        
+        io_service _service;
+        tcp::acceptor _acceptor;
         std::vector<std::shared_ptr<Connection>> _connections;
-        std::queue<std::pair<std::shared_ptr<Connection>, std::unique_ptr<BaseMessage>>, 
-            std::vector<std::pair<std::shared_ptr<Connection>, std::unique_ptr<BaseMessage>>>> _messages;
+        std::queue<std::pair<std::shared_ptr<Connection>, std::unique_ptr<BaseMessage>>> _messages;
+
+        void add_message(std::shared_ptr<Connection> con, std::unique_ptr<BaseMessage>&& msg);
         
         friend class HandlerServerFixture_HandlerServerMessageDisconnect_Test;
+        friend class Connection;
     public:
         
         std::unique_ptr<HandlerMessageServer> handler;
@@ -37,19 +46,17 @@ class Server {
 
         const std::vector<std::shared_ptr<Connection>>& getConnections() const;
 
-        std::vector<std::shared_ptr<Connection>>& setConnections();
-
         void start();
 
         void stop();
 
         void accepting_connections();
 
-        void send_message(const BaseMessage& msg, Connection& connection);
+        void send_message(std::unique_ptr<BaseMessage>&& msg, Connection& connection);
 
         void recv_message();
 
-        void disconnect();
+        void disconnect(Connection& connection);
 
         ~Server();
 };

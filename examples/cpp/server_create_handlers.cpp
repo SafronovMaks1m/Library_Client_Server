@@ -7,7 +7,6 @@
 
 void handler_ping(Server& server, PingMessage& msg, Connection& connection) {
     PongMessage pong(msg.timestamp);
-    server.send_message(pong, connection);
     std::string out = "Send a pong via the send_message method on the passed connection, " 
         + std::to_string(msg.timestamp) + " ms";
     std::cout << out;
@@ -28,12 +27,6 @@ void handler_pong(Server& server, PongMessage& msg, Connection& connection) {
 
 void handler_disconnect(Server& server, DisconnectMessage& msg, Connection& connection){
     std::string out = "Client disconnected, reason: " + msg.reason;
-    for (auto it = server.setConnections().begin(); it != server.setConnections().end(); it++) {
-        if (it->get() == &connection) {
-            server.setConnections().erase(it);
-            break;                         
-        }
-    }
     std::cout << "Client disconnected, reason: " << msg.reason << std::endl;
     log(out);
 }

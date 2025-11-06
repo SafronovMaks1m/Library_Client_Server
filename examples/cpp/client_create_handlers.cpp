@@ -13,8 +13,6 @@ void handler_connect(Client& client, ConnectionAcceptMessage& msg){
 }
 
 void handler_ping(Client& client, PingMessage& msg){
-    client.setConnection() = std::make_shared<Connection>(); // потом уберу, просто чтобы правильно работали тесты
-    client.send_message(PongMessage(msg.timestamp));
     std::string out = "send pong to the server with " + std::to_string(msg.timestamp) + " ms"; 
     std::cout << out << std::endl;
     log(out);
