@@ -23,6 +23,7 @@ enable_testing()
 add_executable(run_tests
     tests/HandlerServerTests.cpp
     tests/HandlerClientTests.cpp
+    tests/ConnectionTests.cpp
     src/cpp/Server.cpp
     src/cpp/Connection.cpp
     src/cpp/HandlerMessageServer.cpp

@@ -6,12 +6,6 @@ Client::Client(uint16_t port, std::string ip): _port(port), _ip(ip), _running(fa
     handler = std::make_unique<HandlerMessageClient>(*this);
 }
 
-void Client::add_message(std::shared_ptr<Connection> con, std::unique_ptr<BaseMessage>&& msg){
-    std::lock_guard<std::mutex> lock(_messages_mutex);
-    _messages.push(std::move(msg));
-    _messages_cv.notify_one();
-}
-
 const std::shared_ptr<Connection>& Client::getConnection() const{
     std::lock_guard<std::mutex> lock(_connection_mutex);
     return _connection;
@@ -29,10 +23,12 @@ void Client::stop(){
     std::lock_guard<std::mutex> lock(_stop_mutex);
     if (!_running)
         return;
-
+        
     _running = false;
     _messages_cv.notify_one();
-
+    if (recv_msg_thread.joinable()){
+        recv_msg_thread.join();
+    }
     {
         std::lock_guard<std::mutex> lock(_connection_mutex);
         if(_connection){
@@ -41,16 +37,15 @@ void Client::stop(){
         }
     }
     _service.stop();
-    if (recv_msg_thread.joinable()){
-        recv_msg_thread.join();
-    }
-    while (!_messages.empty())
-        _messages.pop();
+
     std::cout << "Client stopped." << std::endl;
 }
 
-void Client::reconnecting(){
+const bool Client::is_running() const{
+    return _running;
+}
 
+void Client::reconnecting(){
     bool expected = false;
     if (!_reconnecting.compare_exchange_strong(expected, true)) {
         return;
@@ -64,7 +59,6 @@ void Client::reconnecting(){
             _connection.reset();
         }
     }
-    
     connection_request();
 
     _reconnecting = false;
@@ -81,8 +75,12 @@ void Client::connection_request(){
 
             std::cout << "Connected successfully!" << std::endl;
 
-            _connection = std::make_shared<Connection>(std::move(sock));
-            _connection->start_recv(*this);
+            _connection = std::make_shared<Connection>(std::move(sock), _messages_cv, _messages_mutex);
+
+            _connection->on_disconnect = [this]() { reconnecting(); };
+            _connection->on_error = [this]() { stop(); };
+
+            _connection->start_recv();
             
             _connection_attempts = 5;
             return;
@@ -90,18 +88,17 @@ void Client::connection_request(){
         catch (const boost::system::system_error& e) {
             std::cerr << "Connection failed: " << e.what() << std::endl;
             _connection_attempts -= 1;
-            std::cout << "Reconnecting in 5 seconds..." << std::endl;
-            std::this_thread::sleep_for(std::chrono::seconds(5));
+            std::cout << "Reconnecting in 2 seconds..." << std::endl;
+            std::this_thread::sleep_for(std::chrono::seconds(2));
 
         } 
         catch (const std::exception& e) {
             std::cerr << "Unexpected error: " << e.what() << std::endl;
-            _running = false;
+            _connection_attempts = 0;
             break;
         }
     }
-    if (_running == false || !_connection_attempts){
-        _running = false;
+    if (!_connection_attempts){
         std::cerr << "Failed to connect..." << std::endl;
         stop();
     }
@@ -110,31 +107,33 @@ void Client::connection_request(){
 void Client::send_message(std::unique_ptr<BaseMessage>&& msg) {
     std::lock_guard<std::mutex> lock(_connection_mutex);
     if (_connection) {
-        _connection->send(std::move(msg), *this);
+        _connection->send(std::move(msg));
     }
 }
 
 void Client::recv_message() {
-    std::unique_lock<std::mutex> ul(_messages_mutex, std::defer_lock);
-
     while (_running) {
-        _messages_cv.wait(ul, [this]() { return !_messages.empty() || !_running; });
+        std::unique_lock<std::mutex> ul(_messages_mutex);
+        
+        _messages_cv.wait(ul, [this]() { return (_connection && _connection->has_messages()) || !_running; });
+
 
         if (!_running) break;
-        
-        auto msg = std::move(_messages.front());
-        _messages.pop();
 
-        ul.unlock();
+        auto msg = _connection->pop_message();
 
-        try {
-            handler->handler(std::move(msg));
-        } 
-        catch (const std::exception& e) {
-            std::cerr << "Client Error handling message: " << e.what() << std::endl;
+        if (msg) {
+            ul.unlock();
+
+            try {
+                handler->handler(std::move(msg));
+            } 
+            catch (const std::exception& e) {
+                std::cerr << "Client Error handling message: " << e.what() << std::endl;
+            }
+
+            ul.lock();
         }
-
-        ul.lock();
     }
 }
 

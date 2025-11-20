@@ -28,9 +28,6 @@ class Client{
         int _connection_attempts;
         io_service _service;
         std::shared_ptr<Connection> _connection;
-        std::queue<std::unique_ptr<BaseMessage>> _messages;
-
-        void add_message(std::shared_ptr<Connection> con, std::unique_ptr<BaseMessage>&& msg);
 
         friend class Connection;
         friend class HandlerMessageClient;
@@ -43,6 +40,8 @@ class Client{
         void start();
 
         void stop();
+
+        const bool is_running() const;
 
         const std::shared_ptr<Connection>& getConnection() const;
 

@@ -3,7 +3,9 @@
 #include <memory>
 #include <thread>
 #include <mutex>
+#include <functional>
 #include <iostream>
+#include <queue>
 #include "Message.h"
 #include "Serealize.h"
 
@@ -17,11 +19,20 @@ class Connection : public std::enable_shared_from_this<Connection>{
         tcp::socket _socket;
         std::thread recv_thread;
         bool _running;
-    public:
-        explicit Connection(tcp::socket&& socket);
 
-        template <class T>
-        void send(std::unique_ptr<BaseMessage>&& msg, T& obj){
+        std::queue<std::unique_ptr<BaseMessage>> _messages;
+
+        std::condition_variable& _parent_cv;
+        std::mutex& _parent_mutex;
+
+    public:
+
+        std::function<void()> on_disconnect;
+        std::function<void()> on_error;
+    
+        explicit Connection(tcp::socket&& socket, std::condition_variable& parent_c, std::mutex& parent_mutex);
+
+        void send(std::unique_ptr<BaseMessage>&& msg){
             try {
                 std::string data = Serealize::serealizer(*msg);
 
@@ -38,32 +49,25 @@ class Connection : public std::enable_shared_from_this<Connection>{
                 if (_running) {
                     std::cerr << "[Recv] Error on connection " << _socket.remote_endpoint() 
                             << ": " << e.what() << " (code=" << e.code() << ")" << std::endl;
-                    if constexpr (std::is_same_v<T, Client>) {
-                        std::thread([&obj]() { obj.reconnecting(); }).detach();
-                    } 
-                    else{
-                        std::thread([this, &obj]() { obj.disconnect(*this); }).detach();
-                    }
+                    std::thread([this]() { on_disconnect(); }).detach();
                 }
             }
             catch (const std::exception& e) {
                 std::cerr << "[Send] Unexpected error: " << e.what() << std::endl;
-                std::thread([&obj]() { obj.stop(); }).detach();
+                std::thread([this]() { on_error(); }).detach();
             }
             catch (...) {
                 std::cerr << "[Send] Unknown exception occurred." << std::endl;
-                std::thread([&obj]() { obj.stop(); }).detach();
+                std::thread([this]() { on_error(); }).detach();
             }
         }
 
-        template <class T>
-        void start_recv(T& obj){
+        void start_recv(){
             _running = true;
-            recv_thread = std::thread([this, &obj]() {this->recv(obj);});
+            recv_thread = std::thread([this]() {this->recv();});
         }
 
-        template <class T>
-        void recv(T& obj){
+        void recv(){
             try {
                 while (_running && _socket.is_open()) {
                     uint32_t size;
@@ -80,7 +84,11 @@ class Connection : public std::enable_shared_from_this<Connection>{
 
                     if (Serealize::deserealizers.find(type) != Serealize::deserealizers.end()) {
                         auto msg = Serealize::deserealizers[type](data);
-                        obj.add_message(shared_from_this(), std::move(msg));
+                        {
+                            std::lock_guard<std::mutex> lock(_parent_mutex);
+                            _messages.push(std::move(msg));
+                        }
+                        _parent_cv.notify_one();
                     } 
                     else {
                         std::cerr << "Unknown message type: " << type << std::endl;
@@ -91,23 +99,26 @@ class Connection : public std::enable_shared_from_this<Connection>{
                 if (_running) {
                     std::cerr << "[Recv] Error on connection " << _socket.remote_endpoint() 
                             << ": " << e.what() << " (code=" << e.code() << ")" << std::endl;
-                    if constexpr (std::is_same_v<T, Client>) {
-                        std::thread([&obj]() { obj.reconnecting(); }).detach();
-                    } 
-                    else{
-                        std::thread([this, &obj]() { obj.disconnect(*this); }).detach();
-                    }
+                    std::thread([this]() { on_disconnect(); }).detach();
                 }
             }
             catch (const std::exception& e) {
                 std::cerr << "[Recv] Unexpected error: " << e.what() << std::endl;
-                std::thread([&obj]() { obj.stop(); }).detach();
+                std::thread([this]() { on_error(); }).detach();
             }
             catch (...) {
                 std::cerr << "[Recv] Unknown exception occurred." << std::endl;
-                std::thread([&obj]() { obj.stop(); }).detach();
+                std::thread([this]() { on_error(); }).detach();
             }
         }
+        
+        inline bool has_messages() const {
+            return !_messages.empty();
+        }
+
+        bool is_running();
+
+        std::unique_ptr<BaseMessage> pop_message();
 
         void disconnect();
 };

@@ -28,13 +28,10 @@ class Server {
         std::condition_variable _messages_cv;
         mutable std::mutex _connection_mutex;
         std::mutex _stop_mutex;
-        
+
         io_service _service;
         tcp::acceptor _acceptor;
         std::vector<std::shared_ptr<Connection>> _connections;
-        std::queue<std::pair<std::shared_ptr<Connection>, std::unique_ptr<BaseMessage>>> _messages;
-
-        void add_message(std::shared_ptr<Connection> con, std::unique_ptr<BaseMessage>&& msg);
         
         friend class HandlerServerFixture_HandlerServerMessageDisconnect_Test;
         friend class Connection;
@@ -45,6 +42,8 @@ class Server {
         Server(uint16_t port, std::string ip);
 
         const std::vector<std::shared_ptr<Connection>>& getConnections() const;
+
+        const bool is_running() const;
 
         void start();
 
@@ -57,6 +56,8 @@ class Server {
         void recv_message();
 
         void disconnect(Connection& connection);
+        
+        bool has_any_messages() const;
 
         ~Server();
 };
