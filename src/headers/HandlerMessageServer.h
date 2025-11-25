@@ -31,7 +31,7 @@ public:
             func(_server, static_cast<T&>(msg), connection);
         };
         
-        Serealize::register_deserializer<T>(id);
+        Serealize::register_type<T>(id);
     }
 
     HandlerMessageServer(Server& server);

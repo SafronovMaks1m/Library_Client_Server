@@ -15,12 +15,11 @@ std::unique_ptr<BaseMessage> Connection::pop_message() {
 }
 
 bool Connection::is_running(){
-    return _running;
+    return _running.load();
 }
 
 void Connection::disconnect(){
-    if (_running)
-        _running = false;
+    _running.store(false); 
     boost::system::error_code ec;
     if (_socket.is_open()){
         _socket.shutdown(boost::asio::socket_base::shutdown_both, ec);

@@ -48,3 +48,25 @@ struct ConnectionAcceptMessage : Message<Messages::Connection> {
         ar & reason;
     };
 };
+
+struct SimpleMessage : Message<Messages::Simple> {
+    std::string text;
+    SimpleMessage() = default;
+    SimpleMessage(const std::string& text): text(text){}
+
+    template<class Archive>
+    void serialize(Archive& ar, const unsigned int version){
+        ar & text;
+    };
+};
+
+struct ForwardingMessage : Message<Messages::Forwarding> {
+    std::string text;
+    ForwardingMessage() = default;
+    ForwardingMessage(const std::string& text): text(text){}
+
+    template<class Archive>
+    void serialize(Archive& ar, const unsigned int version){
+        ar & text;
+    };
+};

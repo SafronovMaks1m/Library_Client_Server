@@ -30,3 +30,17 @@ void handler_disconnect(Server& server, DisconnectMessage& msg, Connection& conn
     std::cout << "Client disconnected, reason: " << msg.reason << std::endl;
     log(out);
 }
+
+void handler_simple(Server& server, SimpleMessage& msg, Connection& connection){
+    std::string out = msg.text;
+    std::cout << msg.text << std::endl;
+    log(out);
+}
+
+void handler_forwarding(Server& server, ForwardingMessage& msg, Connection& connection){
+    std::string out = msg.text;
+    std::cout << msg.text << std::endl;
+    std::unique_ptr<BaseMessage> reply = std::make_unique<SimpleMessage>("Accepted");
+    log(out);
+    server.send_message(std::move(reply), connection);
+}

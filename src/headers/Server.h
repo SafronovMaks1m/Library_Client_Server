@@ -20,7 +20,7 @@ class Server {
     private:
         uint16_t _port;
         std::string _ip;
-        bool _running;
+        std::atomic<bool> _running;
 
         std::thread main_thread;
         std::thread recv_msg_thread;

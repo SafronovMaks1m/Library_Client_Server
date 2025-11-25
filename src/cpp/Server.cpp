@@ -14,19 +14,19 @@ const std::vector<std::shared_ptr<Connection>>& Server::getConnections() const {
 }
 
 void Server::start(){
-    if (_running)
+    if (_running.load())
         return;
-    _running = true;
+    _running.store(true);
     recv_msg_thread = std::thread(&Server::recv_message, this);
     main_thread = std::thread(&Server::accepting_connections, this);
 }
 
 void Server::stop(){
     std::lock_guard<std::mutex> lock(_stop_mutex);
-    if (!_running)
+    if (!_running.load())
         return;
 
-    _running = false;
+    _running.store(false);
     _messages_cv.notify_one();
 
     boost::system::error_code ec;
@@ -34,26 +34,26 @@ void Server::stop(){
     if (ec) {
         std::cerr << "Error closing acceptor: " << ec.message() << std::endl;
     }
-
     _service.stop();
     if (recv_msg_thread.joinable())
         recv_msg_thread.join();
     if (main_thread.joinable())
         main_thread.join();
+    std::vector<std::shared_ptr<Connection>> copy_conns;
     {
-        std::lock_guard<std::mutex> lock(_connection_mutex);
-        for (auto& conn : _connections){
-            conn->disconnect();
-            conn.reset();
-        }
+        std::lock_guard<std::mutex> conn_lock(_connection_mutex);
+        copy_conns = std::move(_connections);
         _connections.clear();
     }
-
+    for (auto &c : copy_conns) {
+        if (c) c->disconnect();
+    }
+    _service.reset();
     std::cout << "Server stopped." << std::endl;
 }
 
 const bool Server::is_running() const{
-    return _running;
+    return _running.load();
 }
 
 bool Server::has_any_messages() const{
@@ -81,7 +81,7 @@ void Server::accepting_connections(){
         return;
     }
 
-    while (_running) {
+    while (_running.load()) {
         try {
             tcp::socket socket(_service);
             _acceptor.accept(socket, ec);
@@ -90,7 +90,7 @@ void Server::accepting_connections(){
                 continue;
             }
             if (ec) {
-                if (!_running) 
+                if (!_running.load()) 
                     break;
                 std::cerr << "accept error: " << ec.message() << std::endl;
                 continue;
@@ -121,11 +121,11 @@ void Server::send_message(std::unique_ptr<BaseMessage>&& msg, Connection& connec
 }
 
 void Server::recv_message() {
-    while (_running) {
+    while (_running.load()) {
         std::unique_lock<std::mutex> ul(_messages_mutex);
-        _messages_cv.wait(ul, [this]() { return has_any_messages() || !_running; });
+        _messages_cv.wait(ul, [this]() { return has_any_messages() || !_running.load(); });
         
-        if (!_running) 
+        if (!_running.load()) 
             break;
 
         std::vector<std::shared_ptr<Connection>> connections_copy;
@@ -139,6 +139,9 @@ void Server::recv_message() {
                 continue;
             }
             while (conn->has_messages()) {
+                if (!conn->is_running()) {
+                    break;
+                }
                 auto msg = conn->pop_message();
                 if (msg) {
                     ul.unlock();
@@ -156,15 +159,19 @@ void Server::recv_message() {
 }
 
 void Server::disconnect(Connection& connection) {
-    connection.disconnect();
+    std::shared_ptr<Connection> copy_conn;
     {
         std::lock_guard<std::mutex> lock(_connection_mutex);
         for (auto it = _connections.begin(); it != _connections.end(); ++it) {
             if (it->get() == &connection) {
+                copy_conn = *it;
                 _connections.erase(it);
                 break;
             }
         }
+    }
+    if (copy_conn) {
+        copy_conn->disconnect();
     }
 }
 

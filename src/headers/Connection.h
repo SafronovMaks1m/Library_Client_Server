@@ -18,7 +18,7 @@ class Connection : public std::enable_shared_from_this<Connection>{
     private:
         tcp::socket _socket;
         std::thread recv_thread;
-        bool _running;
+        std::atomic<bool> _running;
 
         std::queue<std::unique_ptr<BaseMessage>> _messages;
 
@@ -34,11 +34,13 @@ class Connection : public std::enable_shared_from_this<Connection>{
 
         void send(std::unique_ptr<BaseMessage>&& msg){
             try {
-                std::string data = Serealize::serealizer(*msg);
-
+                uint16_t type = msg->getType();
+                if (Serealize::serializers.find(type) == Serealize::serializers.end()) {
+                    throw std::runtime_error("No serializer registered for type " + std::to_string(type));
+                }
+                std::string data = Serealize::serializers[type](*msg);
                 uint32_t size = static_cast<uint32_t>(data.size());
                 size = htonl(size);
-                uint16_t type = msg->getType();
                 type = htons(type);
 
                 boost::asio::write(_socket, boost::asio::buffer(&size, sizeof(size)));
@@ -46,7 +48,7 @@ class Connection : public std::enable_shared_from_this<Connection>{
                 boost::asio::write(_socket, boost::asio::buffer(data));
             }
             catch (const boost::system::system_error& e) {
-                if (_running) {
+                if (_running.load()) {
                     std::cerr << "[Recv] Error on connection " << _socket.remote_endpoint() 
                             << ": " << e.what() << " (code=" << e.code() << ")" << std::endl;
                     std::thread([this]() { on_disconnect(); }).detach();
@@ -63,13 +65,13 @@ class Connection : public std::enable_shared_from_this<Connection>{
         }
 
         void start_recv(){
-            _running = true;
+            _running.store(true);
             recv_thread = std::thread([this]() {this->recv();});
         }
 
         void recv(){
             try {
-                while (_running && _socket.is_open()) {
+                while (_running.load() && _socket.is_open()) {
                     uint32_t size;
                     boost::asio::read(_socket, boost::asio::buffer(&size, sizeof(size)));
                     size = ntohl(size);
@@ -81,7 +83,6 @@ class Connection : public std::enable_shared_from_this<Connection>{
                     std::vector<char> buffer(size);
                     boost::asio::read(_socket, boost::asio::buffer(buffer.data(), buffer.size()));
                     std::string data(buffer.begin(), buffer.end());
-
                     if (Serealize::deserealizers.find(type) != Serealize::deserealizers.end()) {
                         auto msg = Serealize::deserealizers[type](data);
                         {
@@ -96,7 +97,7 @@ class Connection : public std::enable_shared_from_this<Connection>{
                 }
             } 
             catch (const boost::system::system_error& e) {
-                if (_running) {
+                if (_running.load()) {
                     std::cerr << "[Recv] Error on connection " << _socket.remote_endpoint() 
                             << ": " << e.what() << " (code=" << e.code() << ")" << std::endl;
                     std::thread([this]() { on_disconnect(); }).detach();

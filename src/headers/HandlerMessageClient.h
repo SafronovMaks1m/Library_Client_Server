@@ -30,7 +30,7 @@ public:
             func(_client, static_cast<T&>(msg));
         };
 
-        Serealize::register_deserializer<T>(id);
+        Serealize::register_type<T>(id);
     }
 
     HandlerMessageClient(Client& client);
