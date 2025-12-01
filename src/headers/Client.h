@@ -17,17 +17,24 @@ class Client{
     private:
         std::uint16_t _port;
         std::string _ip;
-        bool _running;
-        std::mutex _messages_mutex;
+        std::atomic<bool> _running;
+        std::mutex _messages_mutex_recv;
         mutable std::mutex _connection_mutex;
-        std::condition_variable _messages_cv;
+        std::condition_variable _messages_cv_recv;
         std::thread recv_msg_thread;
+        std::thread send_msg_thread;
+        std::mutex _messages_mutex_send;
+        std::condition_variable _messages_cv_send;
         std::mutex _stop_mutex;
 
         std::atomic<bool> _reconnecting{false};
         int _connection_attempts;
         io_service _service;
         std::shared_ptr<Connection> _connection;
+
+        void recv_message();
+
+        void send_message_thd();
 
         friend class Connection;
         friend class HandlerMessageClient;
@@ -50,8 +57,6 @@ class Client{
         void connection_request();
 
         void send_message(std::unique_ptr<BaseMessage>&& msg);
-
-        void recv_message();
 
         ~Client();
 };

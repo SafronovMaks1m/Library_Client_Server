@@ -24,15 +24,22 @@ class Server {
 
         std::thread main_thread;
         std::thread recv_msg_thread;
-        std::mutex _messages_mutex;
-        std::condition_variable _messages_cv;
+        std::thread send_msg_thread;
+        std::mutex _messages_mutex_recv;
+        std::condition_variable _messages_cv_recv;
+        std::mutex _messages_mutex_send;
+        std::condition_variable _messages_cv_send;
         mutable std::mutex _connection_mutex;
         std::mutex _stop_mutex;
 
         io_service _service;
         tcp::acceptor _acceptor;
         std::vector<std::shared_ptr<Connection>> _connections;
-        
+
+        void recv_message();
+
+        void send_message_thd();
+
         friend class HandlerServerFixture_HandlerServerMessageDisconnect_Test;
         friend class Connection;
     public:
@@ -53,11 +60,11 @@ class Server {
 
         void send_message(std::unique_ptr<BaseMessage>&& msg, Connection& connection);
 
-        void recv_message();
-
         void disconnect(Connection& connection);
         
-        bool has_any_messages() const;
+        bool has_any_messages_recv() const;
+
+        bool has_any_messages_send() const;
 
         ~Server();
 };

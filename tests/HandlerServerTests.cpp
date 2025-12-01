@@ -18,7 +18,7 @@ TEST_F(HandlerServerFixture, HandlerServerMessagePing){
     boost::asio::io_service io_service;
     tcp::socket socket(io_service);
     std::condition_variable parent_cv; std::mutex parent_mutex;
-    Connection con(std::move(socket), parent_cv, parent_mutex);
+    Connection con(std::move(socket), parent_cv, parent_mutex, parent_cv, parent_mutex);
     auto now = std::chrono::system_clock::now();
     auto milsec = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
     server.handler->handler(std::make_unique<PingMessage>(milsec.count()), con);
@@ -31,7 +31,7 @@ TEST_F(HandlerServerFixture, HandlerServerMessagePong){
     boost::asio::io_service io_service;
     tcp::socket socket(io_service);
     std::condition_variable parent_cv; std::mutex parent_mutex;
-    Connection con(std::move(socket), parent_cv, parent_mutex);
+    Connection con(std::move(socket), parent_cv, parent_mutex, parent_cv, parent_mutex);
     auto now = std::chrono::system_clock::now();
     auto milsec = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
     server.handler->handler(std::make_unique<PongMessage>(milsec.count()), con);
@@ -44,7 +44,7 @@ TEST_F(HandlerServerFixture, HandlerServerMessageDisconnect){
     boost::asio::io_service io_service;
     tcp::socket socket(io_service);
     std::condition_variable parent_cv; std::mutex parent_mutex;
-    Connection con(std::move(socket), parent_cv, parent_mutex);
+    Connection con(std::move(socket), parent_cv, parent_mutex, parent_cv, parent_mutex);
     server.handler->handler(std::make_unique<DisconnectMessage>("simple shutdown"), con);
     std::string out = "Client disconnected, reason: simple shutdown";
     std::string log = getLastLog();

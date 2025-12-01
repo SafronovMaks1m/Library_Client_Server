@@ -20,21 +20,23 @@ class Connection : public std::enable_shared_from_this<Connection>{
         std::thread recv_thread;
         std::atomic<bool> _running;
 
-        std::queue<std::unique_ptr<BaseMessage>> _messages;
+        std::queue<std::unique_ptr<BaseMessage>> _messages_recv;
 
-        std::condition_variable& _parent_cv;
-        std::mutex& _parent_mutex;
+        std::condition_variable& _parent_cv_recv;
+        std::condition_variable& _parent_cv_send;
+        std::mutex& _parent_mutex_recv;
+        std::mutex& _parent_mutex_send;
 
     public:
-
+        std::queue<std::unique_ptr<BaseMessage>> _messages_send;
         std::function<void()> on_disconnect;
         std::function<void()> on_error;
     
-        explicit Connection(tcp::socket&& socket, std::condition_variable& parent_c, std::mutex& parent_mutex);
+        explicit Connection(tcp::socket&& socket, std::condition_variable& parent_cv_recv, std::mutex& parent_mutex_recv, std::condition_variable& parent_cv_send, std::mutex& parent_mutex_send);
 
         void send(std::unique_ptr<BaseMessage>&& msg){
             try {
-                uint16_t type = msg->getType();
+                uint16_t type = msg->getType(); 
                 if (Serealize::serializers.find(type) == Serealize::serializers.end()) {
                     throw std::runtime_error("No serializer registered for type " + std::to_string(type));
                 }
@@ -85,11 +87,16 @@ class Connection : public std::enable_shared_from_this<Connection>{
                     std::string data(buffer.begin(), buffer.end());
                     if (Serealize::deserealizers.find(type) != Serealize::deserealizers.end()) {
                         auto msg = Serealize::deserealizers[type](data);
-                        {
-                            std::lock_guard<std::mutex> lock(_parent_mutex);
-                            _messages.push(std::move(msg));
-                        }
-                        _parent_cv.notify_one();
+                        std::unique_lock<std::mutex> lock(_parent_mutex_recv);
+                        _parent_cv_recv.wait(lock, [this]() {
+                            return _messages_recv.size() < 10 || !_running.load();
+                        });
+
+                        if (!_running.load()) return;
+
+                        _messages_recv.push(std::move(msg));
+                        lock.unlock();
+                        _parent_cv_recv.notify_one();
                     } 
                     else {
                         std::cerr << "Unknown message type: " << type << std::endl;
@@ -113,13 +120,19 @@ class Connection : public std::enable_shared_from_this<Connection>{
             }
         }
         
-        inline bool has_messages() const {
-            return !_messages.empty();
+        inline bool has_messages_recv() const {
+            return !_messages_recv.empty();
+        }
+
+        inline bool has_messages_send() const {
+            return !_messages_send.empty();
         }
 
         bool is_running();
 
-        std::unique_ptr<BaseMessage> pop_message();
+        std::unique_ptr<BaseMessage> pop_message_recv();
+
+        std::unique_ptr<BaseMessage> pop_message_send();
 
         void disconnect();
 };

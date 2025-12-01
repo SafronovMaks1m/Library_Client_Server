@@ -18,6 +18,7 @@ void Server::start(){
         return;
     _running.store(true);
     recv_msg_thread = std::thread(&Server::recv_message, this);
+    send_msg_thread = std::thread(&Server::send_message_thd, this);
     main_thread = std::thread(&Server::accepting_connections, this);
 }
 
@@ -27,7 +28,8 @@ void Server::stop(){
         return;
 
     _running.store(false);
-    _messages_cv.notify_one();
+    _messages_cv_recv.notify_one();
+    _messages_cv_send.notify_one();
 
     boost::system::error_code ec;
     _acceptor.close(ec);
@@ -37,6 +39,8 @@ void Server::stop(){
     _service.stop();
     if (recv_msg_thread.joinable())
         recv_msg_thread.join();
+    if (send_msg_thread.joinable())
+        send_msg_thread.join();
     if (main_thread.joinable())
         main_thread.join();
     std::vector<std::shared_ptr<Connection>> copy_conns;
@@ -56,9 +60,20 @@ const bool Server::is_running() const{
     return _running.load();
 }
 
-bool Server::has_any_messages() const{
+bool Server::has_any_messages_recv() const{
+    std::lock_guard<std::mutex> lock(_connection_mutex);
     for (const auto& conn : _connections) {
-        if (conn->has_messages()) {
+        if (conn->has_messages_recv()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Server::has_any_messages_send() const{
+    std::lock_guard<std::mutex> lock(_connection_mutex);
+    for (const auto& conn : _connections) {
+        if (conn->has_messages_send()) {
             return true;
         }
     }
@@ -97,7 +112,7 @@ void Server::accepting_connections(){
             }
 
             std::cout << "Client connected: " << socket.remote_endpoint() << std::endl;
-            auto conn = std::make_shared<Connection>(std::move(socket), _messages_cv, _messages_mutex);
+            auto conn = std::make_shared<Connection>(std::move(socket), _messages_cv_recv, _messages_mutex_recv, _messages_cv_send, _messages_mutex_send);
 
             conn->on_disconnect = [this, conn_ptr = conn.get()]() { 
                 this->disconnect(*conn_ptr); 
@@ -117,13 +132,24 @@ void Server::accepting_connections(){
 }
 
 void Server::send_message(std::unique_ptr<BaseMessage>&& msg, Connection& connection) {
-    connection.send(std::move(msg));
+    std::unique_lock<std::mutex> ul(_messages_mutex_send);
+
+    _messages_cv_send.wait(ul, [this, &connection]() {
+        return !connection.is_running() || connection._messages_send.size() < 10 || !_running.load();
+    });
+
+    if (!_running.load() || !connection.is_running())
+        return;
+
+    connection._messages_send.push(std::move(msg));
+    ul.unlock();
+    _messages_cv_send.notify_one();
 }
 
-void Server::recv_message() {
+void Server::send_message_thd(){
     while (_running.load()) {
-        std::unique_lock<std::mutex> ul(_messages_mutex);
-        _messages_cv.wait(ul, [this]() { return has_any_messages() || !_running.load(); });
+        std::unique_lock<std::mutex> ul(_messages_mutex_send);
+        _messages_cv_send.wait(ul, [this]() { return has_any_messages_send() || !_running.load(); });
         
         if (!_running.load()) 
             break;
@@ -138,11 +164,44 @@ void Server::recv_message() {
             if (!conn->is_running()) {
                 continue;
             }
-            while (conn->has_messages()) {
+            while (conn->has_messages_send()) {
                 if (!conn->is_running()) {
                     break;
                 }
-                auto msg = conn->pop_message();
+                auto msg = conn->pop_message_send();
+                if (msg) {
+                    ul.unlock();
+                    conn->send(std::move(msg));
+                    ul.lock();
+                }
+            }
+        }
+    }
+}
+
+void Server::recv_message() {
+    while (_running.load()) {
+        std::unique_lock<std::mutex> ul(_messages_mutex_recv);
+        _messages_cv_recv.wait(ul, [this]() { return has_any_messages_recv() || !_running.load(); });
+        
+        if (!_running.load()) 
+            break;
+
+        std::vector<std::shared_ptr<Connection>> connections_copy;
+        {
+            std::lock_guard<std::mutex> conn_lock(_connection_mutex);
+            connections_copy = _connections;
+        }
+
+        for (auto& conn : connections_copy) {
+            if (!conn->is_running()) {
+                continue;
+            }
+            while (conn->has_messages_recv()) {
+                if (!conn->is_running()) {
+                    break;
+                }
+                auto msg = conn->pop_message_recv();
                 if (msg) {
                     ul.unlock();
                     try {
