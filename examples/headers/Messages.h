@@ -7,7 +7,7 @@ struct PingMessage : Message<Messages::Ping> {
     uint64_t timestamp;
     PingMessage() = default;  
     PingMessage(const uint64_t& ts): timestamp(ts){}
-
+  
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version){
         ar & timestamp;
@@ -18,7 +18,7 @@ struct PongMessage : Message<Messages::Pong> {
     uint64_t timestamp; 
     PongMessage() = default;
     PongMessage(const uint64_t& ts) : timestamp(ts) {}
-
+  
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version){
         ar & timestamp;
