@@ -173,6 +173,7 @@ void Server::send_message_thd(){
                     ul.unlock();
                     conn->send(std::move(msg));
                     ul.lock();
+                _messages_cv_send.notify_one();
                 }
             }
         }
@@ -211,6 +212,7 @@ void Server::recv_message() {
                         std::cerr << "Server Error handling message: " << e.what() << std::endl;
                     }
                     ul.lock();
+                    _messages_cv_recv.notify_one();
                 }
             }
         }

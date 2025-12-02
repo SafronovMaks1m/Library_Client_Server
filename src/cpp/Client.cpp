@@ -138,6 +138,7 @@ void Client::send_message_thd(){
             ul.unlock();
             _connection->send(std::move(msg));
             ul.lock();
+            _messages_cv_send.notify_one();
         }
     }
 }
@@ -161,8 +162,8 @@ void Client::recv_message() {
             catch (const std::exception& e) {
                 std::cerr << "Client Error handling message: " << e.what() << std::endl;
             }
-
             ul.lock();
+            _messages_cv_recv.notify_one();
         }
     }
 }
