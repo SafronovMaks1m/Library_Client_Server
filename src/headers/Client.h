@@ -18,14 +18,13 @@ class Client{
         std::uint16_t _port;
         std::string _ip;
         std::atomic<bool> _running;
-        std::mutex _messages_mutex_recv;
         mutable std::mutex _connection_mutex;
-        std::condition_variable _messages_cv_recv;
         std::thread recv_msg_thread;
         std::thread send_msg_thread;
         std::mutex _messages_mutex_send;
         std::condition_variable _messages_cv_send;
-        std::mutex _stop_mutex;
+
+        ThreadSafeQueue<std::shared_ptr<Connection>> _recv_notify_queue;
 
         std::atomic<bool> _reconnecting{false};
         int _connection_attempts;

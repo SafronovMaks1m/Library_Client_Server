@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "UserClient.h"
 #include "UserServer.h"
+#include "Messages.h"
 #include "thread"
 #include "iostream"
 

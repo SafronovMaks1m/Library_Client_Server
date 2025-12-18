@@ -29,8 +29,6 @@ public:
         handlers[id] = [this, func](BaseMessage& msg) {
             func(_client, static_cast<T&>(msg));
         };
-
-        Serealize::register_type<T>(id);
     }
 
     HandlerMessageClient(Client& client);

@@ -6,7 +6,9 @@
 #include <functional>
 #include <iostream>
 #include <queue>
+#include <atomic>
 #include "Message.h"
+#include "ThreadSafeQueue.h"
 #include "Serealize.h"
 
 
@@ -20,27 +22,20 @@ class Connection : public std::enable_shared_from_this<Connection>{
         std::thread recv_thread;
         std::atomic<bool> _running;
 
-        std::queue<std::unique_ptr<BaseMessage>> _messages_recv;
-
-        std::condition_variable& _parent_cv_recv;
-        std::condition_variable& _parent_cv_send;
-        std::mutex& _parent_mutex_recv;
-        std::mutex& _parent_mutex_send;
+        ThreadSafeQueue<std::unique_ptr<BaseMessage>> _messages_recv;
+        ThreadSafeQueue<std::shared_ptr<Connection>>& _own_notify;
 
     public:
-        std::queue<std::unique_ptr<BaseMessage>> _messages_send;
+        ThreadSafeQueue<std::unique_ptr<BaseMessage>> _messages_send;
         std::function<void()> on_disconnect;
         std::function<void()> on_error;
     
-        explicit Connection(tcp::socket&& socket, std::condition_variable& parent_cv_recv, std::mutex& parent_mutex_recv, std::condition_variable& parent_cv_send, std::mutex& parent_mutex_send);
+        explicit Connection(tcp::socket&& socket, ThreadSafeQueue<std::shared_ptr<Connection>>& own_notify);
 
         void send(std::unique_ptr<BaseMessage>&& msg){
             try {
                 uint16_t type = msg->getType(); 
-                if (Serealize::serializers.find(type) == Serealize::serializers.end()) {
-                    throw std::runtime_error("No serializer registered for type " + std::to_string(type));
-                }
-                std::string data = Serealize::serializers[type](*msg);
+                std::string data = Serealize::serealizer(*msg);
                 uint32_t size = static_cast<uint32_t>(data.size());
                 size = htonl(size);
                 type = htons(type);
@@ -85,22 +80,9 @@ class Connection : public std::enable_shared_from_this<Connection>{
                     std::vector<char> buffer(size);
                     boost::asio::read(_socket, boost::asio::buffer(buffer.data(), buffer.size()));
                     std::string data(buffer.begin(), buffer.end());
-                    if (Serealize::deserealizers.find(type) != Serealize::deserealizers.end()) {
-                        auto msg = Serealize::deserealizers[type](data);
-                        std::unique_lock<std::mutex> lock(_parent_mutex_recv);
-                        _parent_cv_recv.wait(lock, [this]() {
-                            return _messages_recv.size() < 10 || !_running.load();
-                        });
-
-                        if (!_running.load()) return;
-
-                        _messages_recv.push(std::move(msg));
-                        lock.unlock();
-                        _parent_cv_recv.notify_one();
-                    } 
-                    else {
-                        std::cerr << "Unknown message type: " << type << std::endl;
-                    }
+                    auto msg = Serealize::deserealizer(data);
+                    _messages_recv.push_wait(std::move(msg));
+                    _own_notify.push(shared_from_this());
                 }
             } 
             catch (const boost::system::system_error& e) {

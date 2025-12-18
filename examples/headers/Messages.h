@@ -1,6 +1,9 @@
 #pragma once
 #include "Message.h"
 #include "enums.h"
+#include "string"
+#include <boost/serialization/export.hpp>
+#include <boost/serialization/base_object.hpp>
 
 
 struct PingMessage : Message<Messages::Ping> { 
@@ -10,6 +13,7 @@ struct PingMessage : Message<Messages::Ping> {
   
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version){
+        ar & boost::serialization::base_object<Message<Messages::Ping>>(*this);
         ar & timestamp;
     };
 };
@@ -21,6 +25,7 @@ struct PongMessage : Message<Messages::Pong> {
   
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version){
+        ar & boost::serialization::base_object<Message<Messages::Pong>>(*this);
         ar & timestamp;
     };
 };
@@ -32,6 +37,7 @@ struct DisconnectMessage : Message<Messages::Disconnect> {
 
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version){
+        ar & boost::serialization::base_object<Message<Messages::Disconnect>>(*this);
         ar & reason;
     };
 };
@@ -44,6 +50,7 @@ struct ConnectionAcceptMessage : Message<Messages::Connection> {
 
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version){
+        ar & boost::serialization::base_object<Message<Messages::Connection>>(*this);
         ar & accepted;
         ar & reason;
     };
@@ -56,6 +63,7 @@ struct SimpleMessage : Message<Messages::Simple> {
 
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version){
+        ar & boost::serialization::base_object<Message<Messages::Simple>>(*this);
         ar & text;
     };
 };
@@ -67,6 +75,7 @@ struct ForwardingMessage : Message<Messages::Forwarding> {
 
     template<class Archive>
     void serialize(Archive& ar, const unsigned int version){
+        ar & boost::serialization::base_object<Message<Messages::Forwarding>>(*this);
         ar & text;
     };
 };

@@ -6,10 +6,12 @@
 #include <string>
 #include <utility>
 #include <thread>
+#include <atomic>
 #include <mutex>
 #include <condition_variable>
 #include "Connection.h"
 #include "Message.h"
+#include "ThreadSafeQueue.h"
 
 class HandlerMessageServer;
 
@@ -25,16 +27,15 @@ class Server {
         std::thread main_thread;
         std::thread recv_msg_thread;
         std::thread send_msg_thread;
-        std::mutex _messages_mutex_recv;
-        std::condition_variable _messages_cv_recv;
         std::mutex _messages_mutex_send;
         std::condition_variable _messages_cv_send;
         mutable std::mutex _connection_mutex;
-        std::mutex _stop_mutex;
 
         io_service _service;
         tcp::acceptor _acceptor;
         std::vector<std::shared_ptr<Connection>> _connections;
+
+        ThreadSafeQueue<std::shared_ptr<Connection>> _recv_notify_queue;
 
         void recv_message();
 

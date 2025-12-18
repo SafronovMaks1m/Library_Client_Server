@@ -30,8 +30,6 @@ public:
         handlers[id] = [this, func](BaseMessage& msg, Connection& connection) {
             func(_server, static_cast<T&>(msg), connection);
         };
-        
-        Serealize::register_type<T>(id);
     }
 
     HandlerMessageServer(Server& server);

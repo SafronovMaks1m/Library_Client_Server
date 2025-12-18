@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "UserServer.h"
 #include <boost/asio.hpp>
+#include <ThreadSafeQueue.h>
 
 using boost::asio::ip::tcp;
 
@@ -17,8 +18,8 @@ struct HandlerServerFixture : public testing::Test {
 TEST_F(HandlerServerFixture, HandlerServerMessagePing){
     boost::asio::io_service io_service;
     tcp::socket socket(io_service);
-    std::condition_variable parent_cv; std::mutex parent_mutex;
-    Connection con(std::move(socket), parent_cv, parent_mutex, parent_cv, parent_mutex);
+    ThreadSafeQueue<std::shared_ptr<Connection>> _recv_notify_queue;
+    Connection con(std::move(socket), _recv_notify_queue);
     auto now = std::chrono::system_clock::now();
     auto milsec = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
     server.handler->handler(std::make_unique<PingMessage>(milsec.count()), con);
@@ -30,8 +31,8 @@ TEST_F(HandlerServerFixture, HandlerServerMessagePing){
 TEST_F(HandlerServerFixture, HandlerServerMessagePong){
     boost::asio::io_service io_service;
     tcp::socket socket(io_service);
-    std::condition_variable parent_cv; std::mutex parent_mutex;
-    Connection con(std::move(socket), parent_cv, parent_mutex, parent_cv, parent_mutex);
+    ThreadSafeQueue<std::shared_ptr<Connection>> _recv_notify_queue;
+    Connection con(std::move(socket), _recv_notify_queue);
     auto now = std::chrono::system_clock::now();
     auto milsec = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
     server.handler->handler(std::make_unique<PongMessage>(milsec.count()), con);
@@ -43,8 +44,8 @@ TEST_F(HandlerServerFixture, HandlerServerMessagePong){
 TEST_F(HandlerServerFixture, HandlerServerMessageDisconnect){
     boost::asio::io_service io_service;
     tcp::socket socket(io_service);
-    std::condition_variable parent_cv; std::mutex parent_mutex;
-    Connection con(std::move(socket), parent_cv, parent_mutex, parent_cv, parent_mutex);
+    ThreadSafeQueue<std::shared_ptr<Connection>> _recv_notify_queue;
+    Connection con(std::move(socket), _recv_notify_queue);
     server.handler->handler(std::make_unique<DisconnectMessage>("simple shutdown"), con);
     std::string out = "Client disconnected, reason: simple shutdown";
     std::string log = getLastLog();

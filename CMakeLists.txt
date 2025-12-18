@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 find_package(Boost REQUIRED COMPONENTS serialization system)
 
-add_executable(my_app src/cpp/main.cpp)
+add_executable(my_app src/cpp/main.cpp examples/cpp/MessageExports.cpp)
 
 target_link_libraries(my_app 
     ${Boost_LIBRARIES}
@@ -21,6 +21,7 @@ target_include_directories(my_app PRIVATE
 enable_testing()
 
 add_executable(run_tests
+    tests/main.cpp
     tests/HandlerServerTests.cpp
     tests/HandlerClientTests.cpp
     tests/ConnectionTests.cpp
@@ -34,6 +35,7 @@ add_executable(run_tests
     examples/cpp/client_create_handlers.cpp
     examples/cpp/UserClient.cpp
     examples/cpp/UserServer.cpp
+    examples/cpp/MessageExports.cpp
 )
 
 target_include_directories(run_tests PRIVATE
@@ -44,6 +46,7 @@ target_include_directories(run_tests PRIVATE
 )
 
 target_link_libraries(run_tests 
+    Boost::serialization
     ${Boost_LIBRARIES}
     gtest 
     gtest_main 

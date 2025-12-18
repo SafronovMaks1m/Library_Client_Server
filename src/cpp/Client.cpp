@@ -21,27 +21,23 @@ void Client::start(){
 }
 
 void Client::stop(){
-    std::lock_guard<std::mutex> lock(_stop_mutex);
     if (!_running.load())
         return;
         
     _running.store(false);
-    _messages_cv_recv.notify_one();
+    _recv_notify_queue.push(std::shared_ptr<Connection>{});
     _messages_cv_send.notify_one();
-
     _service.stop();
     if (recv_msg_thread.joinable()){
         recv_msg_thread.join();
     }
     if (send_msg_thread.joinable())
         send_msg_thread.join();
-    std::shared_ptr<Connection> tmp;
+    std::lock_guard<std::mutex> lock(_connection_mutex);
     {
-        std::lock_guard<std::mutex> lock(_connection_mutex);
-        tmp = std::move(_connection);
+        if (_connection) 
+            _connection->disconnect();
     }
-    if (tmp) 
-        tmp->disconnect();
     _service.reset();
     std::cout << "Client stopped." << std::endl;
 }
@@ -80,7 +76,7 @@ void Client::connection_request(){
 
             std::cout << "Connected successfully!" << std::endl;
 
-            _connection = std::make_shared<Connection>(std::move(sock), _messages_cv_recv, _messages_mutex_recv, _messages_cv_send, _messages_mutex_send);
+            _connection = std::make_shared<Connection>(std::move(sock), _recv_notify_queue);
 
             _connection->on_disconnect = [this]() { reconnecting(); };
             _connection->on_error = [this]() { stop(); };
@@ -110,17 +106,11 @@ void Client::connection_request(){
 }
 
 void Client::send_message(std::unique_ptr<BaseMessage>&& msg) {
-    std::unique_lock<std::mutex> ul(_messages_mutex_send);
-
-    _messages_cv_send.wait(ul, [this]() {
-        return !_connection->is_running() || _connection->_messages_send.size() < 10 || !_running.load();
-    });
-
     if (!_running.load() || !_connection->is_running())
         return;
 
-    _connection->_messages_send.push(std::move(msg));
-    ul.unlock();
+    _connection->_messages_send.push_wait(std::move(msg));
+
     _messages_cv_send.notify_one();
 }
 
@@ -133,37 +123,35 @@ void Client::send_message_thd(){
         if (!_running.load()) break;
 
         auto msg = _connection->pop_message_send();
-
+        _messages_cv_send.notify_one();
         if (msg) {
             ul.unlock();
             _connection->send(std::move(msg));
-            ul.lock();
-            _messages_cv_send.notify_one();
         }
     }
 }
 
 void Client::recv_message() {
     while (_running.load()) {
-        std::unique_lock<std::mutex> ul(_messages_mutex_recv);
-        
-        _messages_cv_recv.wait(ul, [this]() { return (_connection && _connection->has_messages_recv()) || !_running.load(); });
+        std::shared_ptr<Connection> conn;
+        try {
+            conn = _recv_notify_queue.wait_and_pop();
+        } catch (...) {
+            continue;
+        }
+        if (!conn) 
+            continue;
 
-        if (!_running.load()) break;
-
-        auto msg = _connection->pop_message_recv();
-
-        if (msg) {
-            ul.unlock();
-
+        while (conn->is_running() && conn->has_messages_recv()) {
+            auto msg = conn->pop_message_recv();
+            if (!msg) 
+                break;
             try {
                 handler->handler(std::move(msg));
             } 
             catch (const std::exception& e) {
                 std::cerr << "Client Error handling message: " << e.what() << std::endl;
             }
-            ul.lock();
-            _messages_cv_recv.notify_one();
         }
     }
 }

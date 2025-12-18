@@ -23,14 +23,12 @@ void Server::start(){
 }
 
 void Server::stop(){
-    std::lock_guard<std::mutex> lock(_stop_mutex);
     if (!_running.load())
         return;
 
     _running.store(false);
-    _messages_cv_recv.notify_one();
+    _recv_notify_queue.push(std::shared_ptr<Connection>{});
     _messages_cv_send.notify_one();
-
     boost::system::error_code ec;
     _acceptor.close(ec);
     if (ec) {
@@ -112,7 +110,7 @@ void Server::accepting_connections(){
             }
 
             std::cout << "Client connected: " << socket.remote_endpoint() << std::endl;
-            auto conn = std::make_shared<Connection>(std::move(socket), _messages_cv_recv, _messages_mutex_recv, _messages_cv_send, _messages_mutex_send);
+            auto conn = std::make_shared<Connection>(std::move(socket), _recv_notify_queue);
 
             conn->on_disconnect = [this, conn_ptr = conn.get()]() { 
                 this->disconnect(*conn_ptr); 
@@ -132,17 +130,10 @@ void Server::accepting_connections(){
 }
 
 void Server::send_message(std::unique_ptr<BaseMessage>&& msg, Connection& connection) {
-    std::unique_lock<std::mutex> ul(_messages_mutex_send);
+    if (!_running.load() || !connection.is_running()) return;
 
-    _messages_cv_send.wait(ul, [this, &connection]() {
-        return !connection.is_running() || connection._messages_send.size() < 10 || !_running.load();
-    });
-
-    if (!_running.load() || !connection.is_running())
-        return;
-
-    connection._messages_send.push(std::move(msg));
-    ul.unlock();
+    connection._messages_send.push_wait(std::move(msg), 10);
+    
     _messages_cv_send.notify_one();
 }
 
@@ -173,7 +164,6 @@ void Server::send_message_thd(){
                     ul.unlock();
                     conn->send(std::move(msg));
                     ul.lock();
-                _messages_cv_send.notify_one();
                 }
             }
         }
@@ -182,38 +172,23 @@ void Server::send_message_thd(){
 
 void Server::recv_message() {
     while (_running.load()) {
-        std::unique_lock<std::mutex> ul(_messages_mutex_recv);
-        _messages_cv_recv.wait(ul, [this]() { return has_any_messages_recv() || !_running.load(); });
-        
-        if (!_running.load()) 
-            break;
-
-        std::vector<std::shared_ptr<Connection>> connections_copy;
-        {
-            std::lock_guard<std::mutex> conn_lock(_connection_mutex);
-            connections_copy = _connections;
+        std::shared_ptr<Connection> conn;
+        try {
+            conn = _recv_notify_queue.wait_and_pop();
+        } catch (...) {
+            continue;
         }
+        if (!conn) 
+            continue;
 
-        for (auto& conn : connections_copy) {
-            if (!conn->is_running()) {
-                continue;
-            }
-            while (conn->has_messages_recv()) {
-                if (!conn->is_running()) {
-                    break;
-                }
-                auto msg = conn->pop_message_recv();
-                if (msg) {
-                    ul.unlock();
-                    try {
-                        handler->handler(std::move(msg), *conn);
-                    } 
-                    catch (const std::exception& e) {
-                        std::cerr << "Server Error handling message: " << e.what() << std::endl;
-                    }
-                    ul.lock();
-                    _messages_cv_recv.notify_one();
-                }
+        while (conn->is_running() && conn->has_messages_recv()) {
+            auto msg = conn->pop_message_recv();
+            if (!msg) 
+                break;
+            try {
+                handler->handler(std::move(msg), *conn);
+            } catch (const std::exception& e) {
+                std::cerr << "Server Error handling message: " << e.what() << std::endl;
             }
         }
     }
