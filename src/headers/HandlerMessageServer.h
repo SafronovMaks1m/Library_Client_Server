@@ -7,6 +7,7 @@
 #include <iostream>
 #include <string>
 #include "Message.h"
+#include "Serealize.h"
 #include "Server.h"
 #include "Connection.h"
 

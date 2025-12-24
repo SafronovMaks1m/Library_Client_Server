@@ -13,8 +13,6 @@ void handler_connect(Client& client, ConnectionAcceptMessage& msg){
 }
 
 void handler_ping(Client& client, PingMessage& msg){
-    client.setConnection() = std::make_shared<Connection>(); // потом уберу, просто чтобы правильно работали тесты
-    client.send_message(PongMessage(msg.timestamp));
     std::string out = "send pong to the server with " + std::to_string(msg.timestamp) + " ms"; 
     std::cout << out << std::endl;
     log(out);
@@ -32,8 +30,14 @@ void handler_pong(Client& client, PongMessage& msg){
     log(out);
 
 }
-void handler_disconnect(Client& client,DisconnectMessage& msg){
+void handler_disconnect(Client& client, DisconnectMessage& msg){
     std::string out = "Disconnected from server. Reason: " + msg.reason;
     std::cout << out << std::endl;
+    log(out);
+}
+
+void handler_simple(Client& server, SimpleMessage& msg){
+    std::string out = msg.text;
+    std::cout << msg.text << std::endl;
     log(out);
 }

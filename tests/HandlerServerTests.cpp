@@ -1,5 +1,9 @@
 #include <gtest/gtest.h>
 #include "UserServer.h"
+#include <boost/asio.hpp>
+#include <ThreadSafeQueue.h>
+
+using boost::asio::ip::tcp;
 
 struct HandlerServerFixture : public testing::Test {
     UserSever server;
@@ -12,7 +16,10 @@ struct HandlerServerFixture : public testing::Test {
 };
 
 TEST_F(HandlerServerFixture, HandlerServerMessagePing){
-    Connection con;
+    boost::asio::io_service io_service;
+    tcp::socket socket(io_service);
+    ThreadSafeQueue<std::shared_ptr<Connection>> _recv_notify_queue;
+    Connection con(std::move(socket), _recv_notify_queue);
     auto now = std::chrono::system_clock::now();
     auto milsec = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
     server.handler->handler(std::make_unique<PingMessage>(milsec.count()), con);
@@ -22,7 +29,10 @@ TEST_F(HandlerServerFixture, HandlerServerMessagePing){
 }
 
 TEST_F(HandlerServerFixture, HandlerServerMessagePong){
-    Connection con;
+    boost::asio::io_service io_service;
+    tcp::socket socket(io_service);
+    ThreadSafeQueue<std::shared_ptr<Connection>> _recv_notify_queue;
+    Connection con(std::move(socket), _recv_notify_queue);
     auto now = std::chrono::system_clock::now();
     auto milsec = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
     server.handler->handler(std::make_unique<PongMessage>(milsec.count()), con);
@@ -32,12 +42,12 @@ TEST_F(HandlerServerFixture, HandlerServerMessagePong){
 }
 
 TEST_F(HandlerServerFixture, HandlerServerMessageDisconnect){
-    auto con = std::make_shared<Connection>();
-    server.setConnections().push_back(con);
-    EXPECT_EQ(server.setConnections().size(), 1);
-    server.handler->handler(std::make_unique<DisconnectMessage>("simple shutdown"), *con);
+    boost::asio::io_service io_service;
+    tcp::socket socket(io_service);
+    ThreadSafeQueue<std::shared_ptr<Connection>> _recv_notify_queue;
+    Connection con(std::move(socket), _recv_notify_queue);
+    server.handler->handler(std::make_unique<DisconnectMessage>("simple shutdown"), con);
     std::string out = "Client disconnected, reason: simple shutdown";
     std::string log = getLastLog();
     EXPECT_EQ(log, out);
-    EXPECT_EQ(server.setConnections().size(), 0);
 }

@@ -1,3 +1,4 @@
+#pragma once
 #include <string>
 
 inline std::string _lastLog; //для тестов

@@ -10,4 +10,6 @@ void handler_ping(Client& client, PingMessage& msg);
 
 void handler_pong(Client& client, PongMessage& msg);
 
-void handler_disconnect(Client& client,DisconnectMessage& msg);
+void handler_disconnect(Client& client, DisconnectMessage& msg);
+
+void handler_simple(Client& client, SimpleMessage& msg);
